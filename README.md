@@ -1,74 +1,70 @@
-# Scalable Multi-Servo Control
+# Scalable Servo Control with TouchDesigner and PCA9685
 
-A multi-modal system for controlling large arrays of hobby servos in 2-DOF (Degrees of Freedom) configurations using TouchDesigner and an ESP32 microcontroller.
+A control system for driving arrays of hobby servos in paired 2-DOF X/Y configurations, using TouchDesigner and an ESP32 microcontroller.
 
-This repository contains the project files for a scaleable framework designed to serve as the foundation for complex kinetic art installations, enabling the precise, choreographed movement of many individual 2-axis mechanisms.
+## Overview
+
+The system sends OSC messages over UDP from TouchDesigner to an ESP32, which routes them through a PCA9685 driver board to control servo pairs. The prototype drives 12 servos across 6 paired mechanisms. The architecture scales to larger arrays by adding driver boards.
+
+Three control modes are available in the TouchDesigner network: live gesture control via Leap Motion, a manual slider UI, and pre-programmed keyframe sequences through the Animation COMP.
 
 ![Servo Configuration](servo_configuration_image.png)
 
-## Features
+## Signal Flow
 
-*   **2-DOF Mechanism Control:** The entire system, from the C++ code to the TouchDesigner network, is architected to control servos in X/Y pairs, creating 2-DOF movement.
-*   **Multi-Modal Control:** The system can be controlled via three distinct input methods within TouchDesigner:
-    *   **Real-time Gesture Control:** Using a Leap Motion sensor for direct, intuitive manipulation.
-    *   **Manual Slider Control:** A simple UI for direct control over the X and Y axes of all servos.
-    *   **Pre-Programmed Automation:** Using TouchDesigner's Animation COMP for precise, repeatable keyframe sequences.
-        * (Update coming soon. See https://github.com/steven-tbd/robotic-arm-control-system for example of using Animation Comp to control servo movements)        
-*   **Wireless-Capable & Robust Communication:** Utilizes an ESP32 to receive control data via OSC over UDP, a professional and flexible protocol for interactive installations.
-*   **Scalable Architecture:** Employs a PCA9685 driver board to control large arrays of servos (12 servos / 6 2-DOF mechanisms in the prototype).
-
----
-
-## I/O Diagram
-
-```version-2
-[Leap Motion Camera (Sensor)] ---> (USB HID) ---> [Computer, TouchDesigner (Processor, VPL)] ---> (WiFi/Network UDP) ---> [ESP32, Custom Firmware (Microcontroller Board, C++)] ---> (I2C) ---> [PCA9685 (Motor Control Board)] ---> (PWM) ---> [12x Hobby Servos (Actuator)] 
+```
+[Leap Motion] ---> (USB HID) ---> [TouchDesigner]
+[TouchDesigner] ---> (Wi-Fi / OSC UDP) ---> [ESP32] ---> (I²C) ---> [PCA9685] ---> (PWM) ---> [12x Hobby Servos]
 ```
 
->- Development Environment: The C++ firmware for the ESP32 was developed using the Arduino IDE.
->- This workflow can switch between live Leap Motion input and pre-defined movements running in TouchDesigner's Animation COMP.
->- For installations, the networked (WiFi/Network UDP) connection is often replaced with a tethered (Serial) link for reliability.
->- Default ESP32 I2C pins: GPIO 21 (SDA) and GPIO 22 (SCL).
----
+**2-DOF pairing.** Servos are organized in X/Y pairs throughout the system. TouchDesigner sends paired values, the ESP32 parses them as pairs, and the PCA9685 channels map to the physical mechanism layout.
+
+**OSC over UDP.** TouchDesigner sends OSC messages to the ESP32's IP address over the local network. For permanent installations, switching to a wired serial connection is more reliable than Wi-Fi.
+
+## Control Modes
+
+- **Gesture:** Leap Motion tracks hand position in real time. TouchDesigner maps it to servo targets and streams values over UDP.
+- **Manual:** Slider UI gives direct control over the X and Y axes for all servo pairs.
+- **Animated:** TouchDesigner's Animation COMP drives repeatable keyframe sequences. A Python script inside the `.toe` file generates the keyframe table from a pose table, so sequences are defined as data rather than manually edited curves.
 
 ## Repository Contents
 
-*   **ESP32:**
-    *   `touchdesigner-udp-com.ino`: The C++ code for the ESP32. It connects to WiFi, listens for incoming OSC messages, and controls the X/Y servo pairs.
-*   **TouchDesigner:**
-    *   `motor-control-system_005v2-1.toe`: The multi-modal control network with switchable inputs for Leap Motion, Manual sliders, Programmed Movements, and a Reset position.
+**ESP32/**
+- `touchdesigner-udp-com.ino`: Connects to Wi-Fi, listens for OSC messages, and controls the X/Y servo pairs via the PCA9685.
 
----
+**TouchDesigner/**
+- `motor-control-system_005v2-1.toe`: Control network with switchable inputs for Leap Motion, manual sliders, Animation COMP, and a reset position.
 
-## Setup & Usage
+## Hardware
 
-### Hardware Requirements
+**ESP32** development board
 
-*   ESP32 Development Board
-*   PCA9685 16-Channel Servo Driver
-*   EMAX ES08MA II Servos (or similar hobby servos)
-*   Leap Motion Controller
-*   External 5V power supply for the servos
+**PCA9685** 16-channel PWM servo driver
 
-### Software Requirements
+**EMAX ES08MA II** hobby servos, or similar
 
-*   TouchDesigner
-*   Arduino IDE with the ESP32 board manager installed.
-*   Required Arduino Libraries: `Adafruit_PWMServoDriver`, `OSC`
+**Leap Motion Controller** gesture sensor
 
-### Instructions
+**5 V power supply** for servo power rail
 
-1.  **Configure WiFi:** Open `touchdesigner-udp-com.ino` and replace the placeholder `ssid` and `password` with your WiFi credentials.
-2.  **Upload Code:** Upload the sketch to your ESP32 board.
-3.  **Run TouchDesigner:** Open `motor-control-system_005v2-1.toe`. The network is configured to send OSC data to the ESP32's IP address (update the IP address in the `OSC Out CHOP`).
-4.  **Interact:** Use the buttons at the top of the Touchdesigner network switch between inputs running through the switch_inputMaster Chop to the OSC Out chop.
+## Software
 
-### Note: Python Script for Keyframe Generation
+- **TouchDesigner**
+- **Arduino IDE** with the ESP32 board manager installed
+- **Arduino libraries:** `Adafruit_PWMServoDriver`, `OSC`
 
-The `motor-control-system_005v2-1.toe` file contains a Python script (`generate_keys_script`) designed to automate the creation of keyframe animations.
+## Setup
 
-This script provides a fast, data-driven way to create and modify complex choreographies. Instead of manually editing curves in the Animation Editor, you can simply define servo "poses" in a table (`null_table_keys`), and the script will automatically generate the correctly formatted `keys` table to drive the Animation COMP.
+1. Open `touchdesigner-udp-com.ino` and set your Wi-Fi `ssid` and `password`.
+2. Upload the sketch to the ESP32.
+3. Open `motor-control-system_005v2-1.toe` in TouchDesigner. Update the IP address in the `OSC Out CHOP` to match the ESP32.
+4. Use the mode buttons in the network to switch between Leap Motion, manual, and animated control through the `switch_inputMaster` CHOP.
 
-### Project Links & Demos
-*   **Project Write-up:** [https://stevenmbenton.com/project/scalable-multi-servo-control/](https://stevenmbenton.com/project/scalable-multi-servo-control/)
-*   **YouTube Demo:** [Gesture-Controlled 2-axis mechanisms](https://youtu.be/UZ0vq4jCJZ0)
+## Keyframe Generation
+
+The `.toe` file includes a Python script called `generate_keys_script`. It reads servo poses from the `null_table_keys` table and generates the correctly formatted `keys` table for the Animation COMP. Defining poses as table rows is faster than editing animation curves by hand and makes sequences easier to rearrange or extend.
+
+## Links
+
+- [Project Write-up](https://stevenmbenton.com/hobby-servo-control-system/)
+- [Gesture-Controlled 2-Axis Mechanisms](https://youtu.be/UZ0vq4jCJZ0)
